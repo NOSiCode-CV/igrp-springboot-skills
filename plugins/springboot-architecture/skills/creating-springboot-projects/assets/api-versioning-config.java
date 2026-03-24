@@ -244,7 +244,7 @@ public class ApiVersioningConfig {
 //
 // // Configuration remains the same:
 // // @Configuration
-// // @ImportHttpServices({{NAME}}Client.class)
+// // @ImportHttpServices(group = "{{name}}", types = {{NAME}}Client.class)
 // // public class ClientConfig { }
 
 // ============================================================

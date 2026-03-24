@@ -51,6 +51,10 @@ class MigrationScanner:
         self.result = ScanResult()
         self.modulith_schema_configured = False
         self.modulith_in_use = False
+        self.has_restclient_starter = False
+        self.has_webclient_starter = False
+        self.uses_restclient = False
+        self.uses_webclient = False
 
     def scan(self) -> ScanResult:
         """Run full migration scan"""
@@ -72,6 +76,26 @@ class MigrationScanner:
 
         # Scan Flyway migrations
         self._scan_flyway_migrations()
+
+        # Post-scan: check for missing modular HTTP client starters
+        if self.uses_restclient and not self.has_restclient_starter:
+            self.result.add_issue(
+                "Spring Boot 4 - Dependencies",
+                "WARNING",
+                "pom.xml",
+                0,
+                "RestClient used but spring-boot-starter-restclient not found",
+                "Boot 4 modular starters require spring-boot-starter-restclient for RestClient auto-configuration"
+            )
+        if self.uses_webclient and not self.has_webclient_starter:
+            self.result.add_issue(
+                "Spring Boot 4 - Dependencies",
+                "WARNING",
+                "pom.xml",
+                0,
+                "WebClient used but spring-boot-starter-webclient not found",
+                "Boot 4 modular starters require spring-boot-starter-webclient for WebClient auto-configuration"
+            )
 
         return self.result
 
@@ -156,6 +180,10 @@ class MigrationScanner:
                             f"Change to: testcontainers-{artifact}"
                         )
 
+        # Track modular HTTP client starters
+        self.has_restclient_starter = 'spring-boot-starter-restclient' in content
+        self.has_webclient_starter = 'spring-boot-starter-webclient' in content
+
         # Check for missing Spring Retry dependency (if using @Retryable)
         has_retry = 'spring-retry' in content
         if not has_retry:
@@ -190,6 +218,23 @@ class MigrationScanner:
         ]
         if any(i.startswith("org.springframework.modulith") for i in imports):
             self.modulith_in_use = True
+
+        # Track RestClient/WebClient usage for modular starter check
+        if 'RestClient' in content and not self.uses_restclient:
+            for line in lines:
+                stripped = line.strip()
+                if ('RestClient' in stripped and not stripped.startswith('//')
+                        and 'RestTestClient' not in stripped
+                        and 'import' not in stripped.lower()):
+                    self.uses_restclient = True
+                    break
+        if 'WebClient' in content and not self.uses_webclient:
+            for line in lines:
+                stripped = line.strip()
+                if ('WebClient' in stripped and not stripped.startswith('//')
+                        and 'import' not in stripped.lower()):
+                    self.uses_webclient = True
+                    break
 
         # Check for old test annotations
         test_annotation_patterns = {
@@ -312,6 +357,32 @@ class MigrationScanner:
                         i,
                         "Using @Retryable",
                         suggestion
+                    )
+
+        # Check for TestRestTemplate usage
+        if 'TestRestTemplate' in content:
+            for i, line in enumerate(lines, 1):
+                if 'TestRestTemplate' in line and not line.strip().startswith('//'):
+                    self.result.add_issue(
+                        "Spring Boot 4 - Testing",
+                        "WARNING",
+                        str(rel_path),
+                        i,
+                        "TestRestTemplate is deprecated in Spring Boot 4",
+                        "Replace with RestTestClient (org.springframework.test.web.servlet.client.RestTestClient)"
+                    )
+
+        # Check for manual HttpServiceProxyFactory setup
+        if 'HttpServiceProxyFactory' in content:
+            for i, line in enumerate(lines, 1):
+                if 'HttpServiceProxyFactory' in line and not line.strip().startswith('//'):
+                    self.result.add_issue(
+                        "Spring Boot 4 - HTTP Service Client",
+                        "WARNING",
+                        str(rel_path),
+                        i,
+                        "Manual HttpServiceProxyFactory setup is unnecessary in Boot 4",
+                        "Replace with @ImportHttpServices auto-configuration (org.springframework.web.service.registry.ImportHttpServices)"
                     )
 
         # Check for Jackson 2 classes

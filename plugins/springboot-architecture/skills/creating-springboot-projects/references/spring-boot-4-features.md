@@ -200,7 +200,7 @@ resilience4j:
 
 ## 3. HTTP Service Client Simplification
 
-**Replaces:** Manual RestClient/WebClient setup with HttpServiceProxyFactory
+**What's new:** `@ImportHttpServices` auto-configuration (Spring Framework 7.0) replaces manual `HttpServiceProxyFactory` bean wiring. `@HttpExchange` itself exists since Framework 6.0.
 
 **Benefits:**
 - Declarative interface-based clients
@@ -234,11 +234,11 @@ public interface ProductClient {
     ProductDTO create(CreateProductRequest request);
 }
 
-// 2. Auto-configure
+// 2. Auto-configure — group organizes services sharing the same HTTP client config
 @Configuration
-@ImportHttpServices(ProductClient.class)
+@ImportHttpServices(group = "product", types = ProductClient.class)
 public class ClientConfig {
-    // That's it!
+    // That's it! RestClient is the default client type.
 }
 ```
 
@@ -254,15 +254,12 @@ public class ClientConfig {
 ```yaml
 spring:
   http:
+    clients:
+      connect-timeout: 5s
     serviceclient:
-      product-service:  # Group name
+      product:  # Group name (matches @ImportHttpServices group)
         base-url: http://localhost:8080
-        connect-timeout: 5s
         read-timeout: 10s
-        apiversion:
-          default-version: "1.0"
-          insert:
-            header: API-Version
 ```
 
 ## 4. API Versioning
@@ -461,7 +458,14 @@ public class ProductController {
 
 ## Dependencies
 
-All Spring Boot 4 features are included by default. No additional dependencies required.
+Boot 4 uses modular starters. Add only what you need:
+
+| Starter | Provides |
+|---------|----------|
+| `spring-boot-starter-webmvc` | Spring MVC (replaces `spring-boot-starter-web`) |
+| `spring-boot-starter-restclient` | RestClient / RestTemplate |
+| `spring-boot-starter-webclient` | WebClient (reactive) |
+| `spring-boot-starter-aspectj` | AOP / `@Retryable` / `@ConcurrencyLimit` support |
 
 **Verify versions:**
 ```xml

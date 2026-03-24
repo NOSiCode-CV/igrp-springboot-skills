@@ -78,7 +78,7 @@ public class {{NAME}}Service {
 // import org.springframework.web.service.registry.ImportHttpServices;
 //
 // @Configuration
-// @ImportHttpServices({{NAME}}Client.class)
+// @ImportHttpServices(group = "{{name}}", types = {{NAME}}Client.class)
 // public class {{NAME}}ClientConfig {
 // }
 
@@ -94,5 +94,3 @@ public class {{NAME}}Service {
 
 // application.properties (from the reference repo):
 // spring.http.serviceclient.default.base-url=http://localhost:8080
-// spring.http.serviceclient.default.apiversion.default-version=1.0
-// spring.http.serviceclient.default.apiversion.insert.header=API-Version

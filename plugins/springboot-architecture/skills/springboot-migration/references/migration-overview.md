@@ -24,7 +24,27 @@
 4. Apply Testcontainers 2 changes (package renames)
 5. Test at each step
 
-### Scenario 3: Fixing Retry/Resilience Logic
+### Scenario 3: TestRestTemplate → RestTestClient
+
+**Scan output shows:** `TestRestTemplate` usage
+
+**Steps:**
+1. Replace `TestRestTemplate` with `RestTestClient` in test classes
+2. Add `@AutoConfigureRestTestClient` annotation
+3. Rewrite assertions to use fluent API (`.expectStatus()`, `.expectBody()`)
+4. See `spring-boot-4-migration.md` → "TestRestTemplate → RestTestClient" section
+
+### Scenario 4: HTTP Service Client Migration
+
+**Scan output shows:** Manual `HttpServiceProxyFactory` setup
+
+**Steps:**
+1. Keep existing `@HttpExchange` interfaces unchanged
+2. Replace manual `HttpServiceProxyFactory` bean with `@ImportHttpServices`
+3. Move base URL and timeout config to `spring.http.serviceclient.<group>.*` properties
+4. See `spring-boot-4-migration.md` → "HTTP Service Client" section
+
+### Scenario 5: Fixing Retry/Resilience Logic
 
 **Scan output shows:** `@Retryable` / `@ConcurrencyLimit` usage
 
@@ -59,7 +79,26 @@
 
 **Reference:** `spring-modulith-2-migration.md`
 
-### Issue 4: Testcontainers Package Changes
+### Issue 4: TestRestTemplate Deprecated
+- `TestRestTemplate` → `RestTestClient` (Spring Framework 7.0)
+- Use `@AutoConfigureRestTestClient` for auto-wiring
+
+**Reference:** `spring-boot-4-migration.md` → "TestRestTemplate → RestTestClient"
+
+### Issue 5: Manual HttpServiceProxyFactory Unnecessary
+- `@ImportHttpServices` replaces manual proxy factory wiring (Framework 7.0)
+- `@HttpExchange` interfaces remain unchanged (existed since Framework 6.0)
+
+**Reference:** `spring-boot-4-migration.md` → "HTTP Service Client"
+
+### Issue 6: RestClient/WebClient Modular Starters
+- `spring-boot-starter-webmvc` no longer includes RestClient auto-configuration
+- Add `spring-boot-starter-restclient` for RestClient/RestTemplate
+- Add `spring-boot-starter-webclient` for WebClient
+
+**Reference:** `spring-boot-4-migration.md` → "RestClient / WebClient Modular Starters"
+
+### Issue 7: Testcontainers Package Changes
 - Artifacts renamed with `testcontainers-` prefix
 - Container classes relocated to `org.testcontainers.<module>` packages (e.g., `org.testcontainers.postgresql`)
 - JUnit 4 support removed

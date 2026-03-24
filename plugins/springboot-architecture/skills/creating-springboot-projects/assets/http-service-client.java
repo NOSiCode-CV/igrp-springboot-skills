@@ -82,14 +82,11 @@ public interface {{NAME}}Client {
 //  * one annotation!
 //  */
 // @Configuration
-// @ImportHttpServices({{NAME}}Client.class)
+// @ImportHttpServices(group = "{{name}}", types = {{NAME}}Client.class)
 // public class ClientConfig {
 //     // That's it! Spring Boot 4 handles the rest.
-//     //
-//     // Under the hood, Spring Boot:
-//     // 1. Creates a RestClient.Builder
-//     // 2. Configures HttpServiceProxyFactory
-//     // 3. Registers the client bean in the context
+//     // Group organizes services sharing the same HTTP client config.
+//     // RestClient is the default client type (use clientType for WebClient).
 // }
 
 // ============================================================

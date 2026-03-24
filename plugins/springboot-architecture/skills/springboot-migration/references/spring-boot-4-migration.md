@@ -141,7 +141,38 @@ Update directly to new modular starters (web→webmvc, aop→aspectj, etc.)
 </dependency>
 ```
 
-### 3. Flyway Migration
+### 3. RestClient / WebClient Modular Starters (NEW)
+
+**Change:** Boot 4 splits HTTP client support out of the web starter. `spring-boot-starter-webmvc` no longer includes RestClient auto-configuration.
+
+| Client | New Starter |
+|--------|-------------|
+| `RestClient` / `RestTemplate` | `spring-boot-starter-restclient` |
+| `WebClient` | `spring-boot-starter-webclient` |
+
+**Migration:**
+
+```xml
+<!-- Add if using RestClient or RestTemplate -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-restclient</artifactId>
+</dependency>
+
+<!-- Add if using WebClient -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webclient</artifactId>
+</dependency>
+```
+
+**Testing starters:**
+- `spring-boot-starter-restclient-test` — for RestClient testing support
+- `spring-boot-starter-webclient-test` — for WebClient testing support
+
+Source: [Spring Boot 4.0 Migration Guide](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide)
+
+### 4. Flyway Migration
 
 **Change:** Flyway now requires explicit starter
 
@@ -501,6 +532,137 @@ class MyControllerTest {
 }
 ```
 
+### 4. TestRestTemplate → RestTestClient
+
+**Change:** `TestRestTemplate` is deprecated. Use `RestTestClient` from Spring Framework 7.
+
+| Old | New |
+|-----|-----|
+| `TestRestTemplate` | `RestTestClient` |
+| `@AutoConfigureWebTestClient` | `@AutoConfigureRestTestClient` |
+
+**Migration:**
+
+```java
+// Before (Spring Boot 3)
+import org.springframework.boot.test.web.client.TestRestTemplate;
+
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+class UserControllerTest {
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    @Test
+    void shouldGetUser() {
+        ResponseEntity<User> response = restTemplate.getForEntity("/users/1", User.class);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+}
+
+// After (Spring Boot 4)
+import org.springframework.test.web.servlet.client.RestTestClient;
+
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@AutoConfigureRestTestClient
+class UserControllerTest {
+    @Autowired
+    private RestTestClient client;
+
+    @Test
+    void shouldGetUser() {
+        client.get()
+                .uri("/users/1")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(User.class);
+    }
+}
+```
+
+Source: [RestTestClient :: Spring Framework](https://docs.spring.io/spring-framework/reference/testing/resttestclient.html)
+
+### 5. HTTP Service Client: Manual Setup → @ImportHttpServices
+
+**Change:** Manual `HttpServiceProxyFactory` bean wiring is replaced by `@ImportHttpServices` auto-configuration (Spring Framework 7.0).
+
+Note: `@HttpExchange` itself exists since Framework 6.0. Only `@ImportHttpServices` is new.
+
+```java
+// Before (Spring Boot 3 / Framework 6)
+@Bean
+ProductClient productClient(RestClient.Builder builder) {
+    RestClient restClient = builder.baseUrl("http://api.example.com").build();
+    return HttpServiceProxyFactory
+            .builderFor(RestClientAdapter.create(restClient))
+            .build()
+            .createClient(ProductClient.class);
+}
+
+// After (Spring Boot 4 / Framework 7)
+@Configuration
+@ImportHttpServices(group = "product", types = ProductClient.class)
+public class ClientConfig { }
+```
+
+```yaml
+spring:
+  http:
+    clients:
+      connect-timeout: 5s
+    serviceclient:
+      product:  # Group name (matches @ImportHttpServices group)
+        base-url: http://api.example.com
+        read-timeout: 10s
+```
+
+Source: [Spring Boot HTTP Service Client](https://docs.spring.io/spring-boot/reference/io/rest-client.html)
+
+### 6. Native API Versioning (New Feature)
+
+**What's new:** Spring Framework 7.0 adds native API versioning via `version` attribute on `@GetMapping`, `@PostMapping`, etc.
+
+**No `@ApiVersion` annotation exists** — version is declared directly on mapping annotations.
+
+```java
+@GetMapping(value = "/search", version = "1.0")
+public List<ProductVM> searchV1(@RequestParam("q") String query) { ... }
+
+@GetMapping(value = "/search", version = "2.0")
+public List<ProductEnrichedVM> searchV2(@RequestParam("q") String query) { ... }
+```
+
+```yaml
+spring:
+  mvc:
+    apiversion:
+      enabled: true
+      strategy: header
+      default-version: "1.0"
+      header-name: "API-Version"
+```
+
+**Migration:** Replace custom versioning interceptors/filters with native configuration above.
+
+Source: [API Versioning in Spring](https://spring.io/blog/2025/09/16/api-versioning-in-spring/)
+
+### 7. @ConcurrencyLimit (New Feature)
+
+**What's new:** Native concurrency limiting via `org.springframework.resilience.annotation.ConcurrencyLimit` (Spring Framework 7.0). Requires `@EnableResilientMethods`.
+
+```java
+@Configuration
+@EnableResilientMethods
+public class ResilienceConfig { }
+
+@Service
+public class ReportService {
+    @ConcurrencyLimit(2)
+    public void processExpensiveOperation(String id) { ... }
+}
+```
+
+Source: [Core Spring Resilience Features](https://spring.io/blog/2025/09/09/core-spring-resilience-features/)
+
 ---
 
 ## Configuration Changes
@@ -618,6 +780,8 @@ spring.devtools.livereload.enabled=true
 - [ ] Update Spring Boot version to 4.0.x
 - [ ] Rename `spring-boot-starter-web` to `-webmvc` (or use classic)
 - [ ] Rename `spring-boot-starter-aop` to `-aspectj`
+- [ ] Add `spring-boot-starter-restclient` if using RestClient/RestTemplate
+- [ ] Add `spring-boot-starter-webclient` if using WebClient
 - [ ] Update `spring-security-test` to Spring Boot starter
 - [ ] Add Spring Retry with explicit version (if using Spring Retry directly)
 - [ ] Add Flyway starter (if using database migrations)
@@ -631,6 +795,10 @@ spring.devtools.livereload.enabled=true
 - [ ] Add `@AutoConfigureMockMvc` where needed
 - [ ] Fix retry/resilience imports and annotations
 - [ ] Update package relocations (EntityScan, BootstrapRegistry)
+- [ ] Replace `TestRestTemplate` with `RestTestClient`
+- [ ] Replace manual `HttpServiceProxyFactory` setup with `@ImportHttpServices`
+- [ ] Replace custom API versioning with native `spring.mvc.apiversion.*`
+- [ ] Add `@EnableResilientMethods` for `@ConcurrencyLimit` / native `@Retryable`
 
 ### Phase 3: Configuration
 - [ ] Update Jackson properties (if used)
@@ -654,3 +822,7 @@ spring.devtools.livereload.enabled=true
 - [Spring Framework 7.0 What's New](https://docs.spring.io/spring-framework/reference/7.0/whatsnew.html)
 - [Jackson 3.0 Migration Guide](https://github.com/FasterXML/jackson/wiki/Jackson-Release-3.0)
 - [Vlad Mihalcea - Spring Transaction Best Practices](https://vladmihalcea.com/spring-transaction-best-practices/)
+- [RestTestClient :: Spring Framework](https://docs.spring.io/spring-framework/reference/testing/resttestclient.html)
+- [HTTP Service Client Enhancements (Blog)](https://spring.io/blog/2025/09/23/http-service-client-enhancements/)
+- [API Versioning in Spring (Blog)](https://spring.io/blog/2025/09/16/api-versioning-in-spring/)
+- [Core Spring Resilience Features (Blog)](https://spring.io/blog/2025/09/09/core-spring-resilience-features/)
