@@ -30,8 +30,9 @@ public class {{NAME}}Service {
 
     @Retryable(
             includes = {RuntimeException.class},
-            maxRetries = 5,
-            delay = 2000L
+            maxAttempts = 4,
+            delay = 1000,
+            multiplier = 2
     )
     public Optional<{{NAME}}> getById(String id) {
         log.info("Fetching by id: {} at {}", id, Instant.now());

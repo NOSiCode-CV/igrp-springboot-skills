@@ -184,11 +184,16 @@ class MigrationScanner:
         self.has_restclient_starter = 'spring-boot-starter-restclient' in content
         self.has_webclient_starter = 'spring-boot-starter-webclient' in content
 
-        # Check for missing Spring Retry dependency (if using @Retryable)
-        has_retry = 'spring-retry' in content
-        if not has_retry:
-            # We'll check Java files for @Retryable usage
-            pass
+        # Check for legacy spring-retry dependency (should be removed for Boot 4)
+        if 'spring-retry' in content:
+            self.result.add_issue(
+                "Spring Boot 4 - Legacy Spring Retry",
+                "WARNING",
+                "pom.xml",
+                0,
+                "Legacy spring-retry dependency found",
+                "Remove spring-retry dependency — Spring Framework 7 provides native @Retryable via org.springframework.resilience.annotation.*"
+            )
 
     def _scan_java_files(self):
         """Scan Java files for code issues"""
@@ -330,7 +335,7 @@ class MigrationScanner:
                         str(rel_path),
                         i,
                         "Using org.springframework.resilience annotations",
-                        "Native retry detected; ensure @EnableResilientMethods + AOP, and drop spring-retry if not used"
+                        "Native retry detected; ensure @EnableResilientMethods + spring-boot-starter-aspectj"
                     )
 
         # Check for @Retryable usage and align suggestion with imports
@@ -344,10 +349,10 @@ class MigrationScanner:
                         suggestion = "Ensure @EnableResilientMethods + spring-boot-starter-aspectj"
                         category = "Spring Boot 4 - Retry/Resilience"
                     elif uses_spring_retry:
-                        suggestion = "Confirm Spring Retry vs native resilience; keep spring-retry + aspectj if staying"
-                        category = "Spring Boot 4 - Spring Retry"
+                        suggestion = "Migrate to native org.springframework.resilience.annotation.* — Spring Retry is maintenance-only"
+                        category = "Spring Boot 4 - Legacy Spring Retry"
                     else:
-                        suggestion = "Confirm Spring Retry vs native resilience; ensure matching imports + AOP"
+                        suggestion = "Add imports from org.springframework.resilience.annotation.* + @EnableResilientMethods + aspectj starter"
                         category = "Spring Boot 4 - Retry/Resilience"
 
                     self.result.add_issue(

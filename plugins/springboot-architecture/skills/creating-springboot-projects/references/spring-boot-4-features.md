@@ -88,7 +88,7 @@ public class ProductService {
 
     @Retryable(
         includes = {RuntimeException.class},
-        maxRetries = 5,
+        maxAttempts = 5,
         delay = 2000L  // milliseconds
     )
     public Optional<Product> fetchFromExternalApi(String id) {
@@ -98,10 +98,9 @@ public class ProductService {
     // Optional: Advanced configuration with exponential backoff
     @Retryable(
         includes = {IOException.class},
-        maxRetries = 4,
-        delayString = "500ms",
-        multiplier = 1.5,
-        maxDelay = 3000
+        maxAttempts = 4,
+        delay = 1000,
+        multiplier = 2
     )
     public String callRemoteService() {
         // transient failures handled automatically
@@ -118,7 +117,7 @@ public class ProductService {
 **Parameters:**
 - `includes` - Exception types that trigger retry
 - `excludes` - Exception types that should never retry
-- `maxRetries` - Maximum retry attempts (default: 3)
+- `maxAttempts` - Maximum attempts including initial call (default: 3)
 - `delay` / `delayString` - Delay between retries
 - `multiplier` - Exponential backoff multiplier
 - `maxDelay` - Maximum delay ceiling
@@ -154,6 +153,71 @@ public class ReportService {
 - Prevent thread pool exhaustion
 - Rate limiting for external API calls
 - Bulkhead pattern implementation
+
+### RetryTemplate - Programmatic Retry (NATIVE)
+
+For scenarios needing more control than `@Retryable`:
+
+```java
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryTemplate;
+
+@Service
+public class DriverAssignmentService {
+
+    private final RetryTemplate retryTemplate;
+
+    public DriverAssignmentService() {
+        RetryPolicy retryPolicy = RetryPolicy.builder()
+                .maxAttempts(10)
+                .delay(Duration.ofMillis(2000))
+                .multiplier(1.5)
+                .maxDelay(Duration.ofMillis(10000))
+                .includes(NoDriversAvailableException.class)
+                .build();
+
+        this.retryTemplate = new RetryTemplate(retryPolicy);
+    }
+
+    public Driver assignDriver(Order order) {
+        return retryTemplate.execute(() -> {
+            // logic that may throw NoDriversAvailableException
+            return findAvailableDriver(order);
+        });
+    }
+}
+```
+
+**Observability with RetryListener:**
+
+```java
+import org.springframework.core.retry.RetryListener;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.Retryable;
+
+@Component
+public class MetricsRetryListener implements RetryListener {
+
+    @Override
+    public void beforeRetry(RetryPolicy policy, Retryable<?> retryable) {
+        // track attempt count, log retry start
+    }
+
+    @Override
+    public void onRetrySuccess(RetryPolicy policy, Retryable<?> retryable, Object result) {
+        // track successful recovery
+    }
+
+    @Override
+    public void onRetryFailure(RetryPolicy policy, Retryable<?> retryable, Throwable t) {
+        // track exhausted retries
+    }
+}
+```
+
+Attach to template: `retryTemplate.setRetryListener(listener)`
+
+Source: [danvega/quick-bytes](https://github.com/danvega/quick-bytes) (Spring Boot 4.0.0-RC2)
 
 ### Circuit Breaker - Requires Resilience4j
 
@@ -504,7 +568,7 @@ Boot 4 uses modular starters. Add only what you need:
 1. Replace TestRestTemplate with RestTestClient in tests
 2. Replace Resilience4j @Retry with native @Retryable (requires @EnableResilientMethods)
    - Change package: `org.springframework.resilience.annotation.*`
-   - Update parameters: `retryFor` → `includes`, `maxAttempts` → `maxRetries`
+   - Update parameters: `retryFor` → `includes` (parameter `maxAttempts` keeps same name)
 3. Keep Resilience4j for circuit breaker and advanced patterns
 4. Replace manual HTTP client setup with @ImportHttpServices
 5. Configure API versioning via spring.mvc.apiversion.* properties

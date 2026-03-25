@@ -304,50 +304,56 @@ class UserServiceIntegrationTest {
 ❌ **Missing AOP support**
 ```xml
 <!-- @Retryable won't work without AOP! -->
-<dependency>
-    <groupId>org.springframework.retry</groupId>
-    <artifactId>spring-retry</artifactId>
-</dependency>
+<!-- No spring-retry dependency needed — native in Spring Framework 7 -->
 ```
 
 ✅ **Include AspectJ starter**
 ```xml
-<!-- Required for @Retryable to work -->
+<!-- Required for @Retryable and @ConcurrencyLimit -->
 <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-aspectj</artifactId>
 </dependency>
-<dependency>
-    <groupId>org.springframework.retry</groupId>
-    <artifactId>spring-retry</artifactId>
-</dependency>
 ```
 
-### Spring Retry Integration
+### Native Resilience (Spring Framework 7)
 
-✅ **Option A: Spring Retry (classic pattern)**
+Spring Retry is maintenance-only and superseded by native resilience in Spring Framework 7.
+New Boot 4 projects should use `org.springframework.resilience.annotation.*`.
+
+✅ **Native @Retryable + @ConcurrencyLimit (recommended)**
 ```java
+import org.springframework.resilience.annotation.EnableResilientMethods;
+
+@Configuration
+@EnableResilientMethods
+public class ResilienceConfig {}
+```
+
+```java
+import org.springframework.resilience.annotation.Retryable;
+import org.springframework.resilience.annotation.ConcurrencyLimit;
+
 @Service
-@EnableRetry
 public class PaymentService {
     @Retryable(
-        retryFor = PaymentException.class,
+        includes = {PaymentException.class},
         maxAttempts = 3,
-        backoff = @Backoff(delay = 1000)
+        delay = 1000,
+        multiplier = 2
     )
     public Payment processPayment(Order order) {
-        // May throw PaymentException
+        // May throw PaymentException — retried automatically
     }
 
-    @Recover
-    public Payment recoverPayment(PaymentException e, Order order) {
-        // Fallback logic after all retries fail
-        return handlePaymentFailure(order);
+    @ConcurrencyLimit(2)
+    public void processExpensiveReport(String id) {
+        // Max 2 concurrent executions
     }
 }
 ```
 
-✅ **Option B: Resilience4j (declarative resilience)**
+✅ **Resilience4j (for circuit breaker — NOT native)**
 ```java
 @Service
 public class PaymentService {
@@ -383,10 +389,11 @@ resilience4j:
 ```
 
 **Review Checklist:**
-- [ ] If using `@Retryable`, verify `spring-boot-starter-aspectj` is present
-- [ ] If using Spring Retry directly, ensure explicit `spring-retry` dependency + version
-- [ ] If using Resilience4j, ensure `spring-boot-starter-aop` or `spring-boot-starter-aspectj` is present
+- [ ] If using `@Retryable`/`@ConcurrencyLimit`, verify `spring-boot-starter-aspectj` is present
+- [ ] If using native resilience, verify `@EnableResilientMethods` on a `@Configuration` class
+- [ ] If using Resilience4j (circuit breaker), ensure `spring-boot-starter-aspectj` is present
 - [ ] Verify retry configuration matches production requirements (backoff, max attempts)
+- [ ] If legacy `spring-retry` dependency found, recommend migrating to native `org.springframework.resilience.annotation.*`
 
 ---
 
@@ -872,7 +879,7 @@ When reviewing Spring Boot 4 code:
 - [Modularizing Spring Boot (Blog)](https://spring.io/blog/2025/10/28/modularizing-spring-boot/)
 - [Spring Boot 4.0.0 Announcement](https://spring.io/blog/2025/11/20/spring-boot-4-0-0-available-now/)
 - [Spring Modulith Reference](https://docs.spring.io/spring-modulith/reference/)
-- [Spring Retry Documentation](https://docs.spring.io/spring-retry/docs/current/reference/html/)
+- [Spring Retry (maintenance-only)](https://github.com/spring-projects/spring-retry) — superseded by Spring Framework 7 native resilience
 - [Resilience4j Spring Boot](https://resilience4j.readme.io/docs/getting-started-3)
 - [RestTestClient :: Spring Framework](https://docs.spring.io/spring-framework/reference/testing/resttestclient.html)
 - [HTTP Service Client Enhancements (Blog)](https://spring.io/blog/2025/09/23/http-service-client-enhancements/)

@@ -221,62 +221,55 @@ Source: [Spring Boot 4.0 Migration Guide](https://github.com/spring-projects/spr
 - Package: `org.springframework.resilience.annotation.*`
 - Annotations: `@Retryable`, `@ConcurrencyLimit`
 - Enablement: `@EnableResilientMethods`
-- Parameters used: `includes`, `maxRetries`, `delay`
+- Parameters used: `includes`, `maxAttempts`, `delay`, `multiplier`
 - Circuit breaker is still external (Resilience4j)
 
-**Decision point (ask the user):** Do you want to keep Spring Retry or move to the native Spring Framework 7 resilience annotations?
+Spring Retry is now maintenance-only, superseded by native resilience in Spring Framework 7.
+Migrate to `org.springframework.resilience.annotation.*` and remove `spring-retry` dependency.
 
-- **Native (recommended for Boot 4):**
-  - Use `org.springframework.resilience.annotation.*` + `@EnableResilientMethods`
-  - Remove `spring-retry` if no longer used
-  - Official reference: https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/resilience/annotation/Retryable.html
-  - Spring Retry status: maintenance only, superseded by Spring Framework 7: https://github.com/spring-projects/spring-retry
-- **Spring Retry (legacy):**
-  - Use `org.springframework.retry.annotation.*` + `@EnableRetry`
-  - Keep `spring-retry` with an explicit version
-
-**Migration (Spring Retry variant, if used directly):**
+**Required dependencies:**
 
 ```xml
-<!-- Add explicit version (check Maven Central for latest) -->
-<dependency>
-    <groupId>org.springframework.retry</groupId>
-    <artifactId>spring-retry</artifactId>
-    <version><!-- Specify version explicitly, e.g., 2.0.x --></version>
-</dependency>
-
-<!-- AOP support required for @Retryable -->
+<!-- AOP support required for @Retryable / @ConcurrencyLimit -->
 <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-aspectj</artifactId>
 </dependency>
 ```
 
-**Code changes required:**
+**Migration steps:**
+
+1. Remove `spring-retry` dependency from pom.xml
+2. Replace `@EnableRetry` with `@EnableResilientMethods`
+3. Change imports: `org.springframework.retry.annotation.*` → `org.springframework.resilience.annotation.*`
+4. Update annotation parameters: `retryFor` → `includes`, `backoff = @Backoff(delay = 1000)` → `delay = 1000`
+5. Remove `@Recover` methods (use try-catch or programmatic `RetryTemplate` instead)
+
+**Code changes:**
 
 ```java
-// Config (sample repo)
+// Config
 import org.springframework.resilience.annotation.EnableResilientMethods;
 
 @Configuration
-@EnableResilientMethods  // Required
-public class ResilienceConfig {
-}
+@EnableResilientMethods
+public class ResilienceConfig {}
 
-// Service (sample repo)
+// Service
 import org.springframework.resilience.annotation.Retryable;
 
 @Retryable(
     includes = {SomeException.class},
-    maxRetries = 3,
-    delay = 1000L
+    maxAttempts = 4,
+    delay = 1000,
+    multiplier = 2
 )
 public void methodWithRetry() {
     // ...
 }
 ```
 
-**Alternative:** If using Spring Retry directly, use `org.springframework.retry.annotation.*` and `@EnableRetry`.
+Reference: https://github.com/spring-projects/spring-retry (maintenance-only status)
 
 ### 6. Web MVC Test Starter
 
@@ -769,8 +762,8 @@ spring.devtools.livereload.enabled=true
 
 **Solution:**
 1. Add `spring-boot-starter-aspectj`
-2. Add `@EnableResilientMethods` to configuration
-3. If using Spring Retry directly, ensure `spring-retry` dependency is present with explicit version
+2. Add `@EnableResilientMethods` to a `@Configuration` class
+3. Verify imports use `org.springframework.resilience.annotation.*` (not legacy `org.springframework.retry.*`)
 
 ---
 
